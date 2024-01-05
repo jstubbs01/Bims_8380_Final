@@ -1,0 +1,280 @@
+---
+authors: "John Stubbs and Chris Prevost"
+title: "Exploring_Pokemon_Stats - Final Project"
+due date: "March 24th, 2021"
+course: "BIMS 8380"
+output: pdf_document
+---
+*Pokemon have stats associated with their "permanent stats", those being"*
+
+*Hit points (HP), Attack, Defense, Special Attack, Special Defense, Speed*
+
+For each permanent stat, each pokemon has a base stat that raises with leveling through battle, items, or stat-raising moves.
+
+The "Total" column is: The sum of the base of each permanent  stat and a general guide to how strong a pokemon is.
+
+"Stats" =  base stat for the referred pokemon or group of pokemon
+```{r}
+#Load all libraries
+library(tidyverse)
+library(rstatix)
+library(ggpubr)
+library(ggplot2)
+library(car)
+```
+
+Read in dataframe:
+
+```{r}
+pkmn=read.csv("Pokemon.csv")
+```
+
+
+### Overall question: Does the mean Total change significantly per gen?
+
+First, a note. I hypothesize that legendary pokemon have significantly higher mean totals compared to non-legendary pokemon.  I will test that.
+
+Let's look at the density plot first:
+
+```{r}
+ggplot(pkmn, aes(x=Total, fill=Legendary)) +
+  geom_density(alpha=0.3)
+```
+
+There appear to be a higher density of legendary pokemon with high total stats. Let's test our hypothesis:
+
+*HO: There is no difference in Pokemon 'Total' between legendary and non-legendary pokemon.*
+*alpha = 0.05*
+
+First, let's check assumptions for a t-test:
+
+## Random Sampling
+
+I'll take a random sample of 50 legendary and non-legendary pokemon
+
+```{r}
+pkmn=read.csv("Pokemon.csv")
+set.seed(123)
+Legendary=pkmn %>% 
+  filter(Legendary=="True") %>% 
+  sample_n(50)
+NonLegendary=pkmn %>%
+  filter(Legendary=="False") %>% 
+  sample_n(50)
+```
+
+## Normality
+
+I'll make a QQ plot of the Total Score for each group
+
+```{r}
+qqnorm(Legendary$Total, pch = 1, frame = FALSE)
+qqline(Legendary$Total, col = "steelblue", lwd = 2)
+
+qqnorm(NonLegendary$Total, pch = 1, frame = FALSE)
+qqline(NonLegendary$Total, col = "steelblue", lwd = 2)
+```
+
+## What is the mean/median Total for legendary vs nonlegendary pokemon? What does the boxlot look like?
+
+```{r}
+# summary stats for sample of 50
+
+Legendary %>% filter(Legendary=="True") %>% get_summary_stats(Total, type="full")
+
+NonLegendary %>% filter(Legendary=="False") %>% get_summary_stats(Total, type="full")
+
+#boxplot for sample of 50
+
+boxplot(NonLegendary$Total,Legendary$Total,main="Boxplot for sample of 50 Nonlegendary v Legendary Pkmn", ylab="Total" )
+
+#boxplot for total df
+
+ggboxplot(
+  pkmn, x = "Legendary", y = "Total",
+  ylab = "Total", xlab = "Legendary Status", add = "jitter"
+  )
+```
+*The QQ plots do not show normality, there's a backwards S shape for the nonlegendary and legendary, therefore, I'll use a Wilcox test.*
+
+*The mean Total for Legendary as well as the median Total for Legendary is higher than the mean and median Total for Nonlegendary. The boxplot shows the same.*
+
+
+## Independent Samples
+
+The samples are independent from each other.
+
+## Equal variance
+
+I'll use Bartlett's test for the entire dataframe and also make histograms to test equal variance
+
+```{r}
+ggplot(Legendary, aes(x=Total))+geom_histogram(bins = 7)+ggtitle("Legendary Pokemon vs Total")
+
+ggplot(NonLegendary, aes(x=Total))+geom_histogram(bins = 7)+ggtitle("NonLegendary Pokemon vs Total")
+
+bartlett.test(Total~Legendary, pkmn) #Alpha = 0.05
+```
+
+*Bartlett's test shows a p-value (1.767e-07) less than alpha (set to 0.05). This, along with the histograms, indicates that there is an unequal variance between the legendary and Non-legendary pokemon.*
+
+Since the assumptions are not met, and there is unequal variance, I will perform a Wilcox test on the sample.
+```{r}
+wilcox.test(Legendary$Total, NonLegendary$Total) 
+```
+
+*According to the Wilcoxon rank sum test, the mean Totals between Legendary and NonLegendary appear to be significantly different with a p-value <3.19e-16.*
+
+*According to this, we conclude legendary pokemon are on average more powerful than nonlegendary*
+
+## Finally, What is the mean total of legendary vs nonlegendary pokemon Across the whole dataset?
+
+```{r}
+pkmn %>% filter(Legendary=="False") %>% get_summary_stats(Total, type="full")
+pkmn %>% filter(Legendary=="True") %>% get_summary_stats(Total, type="full")
+```
+
+*Legendary pokemon have a mean total of 637 vs 417 for Non-legendary pokemon.*
+
+Despite this,  I'll continue on to answer the Overall question:
+
+## Does the mean total change significantly per gen?
+
+*HO: There is no difference in Pokemon 'Total' across generations.*
+*alpha = 0.05*
+To answer this, we'll use an ANOVA to test the significance of the mean totals across gens.
+
+## Examining the relationship between Total and Gens
+
+
+Let's make a histogram and a QQ plot
+
+```{r}
+#save generation as a factor in new pkmn DF
+
+pkmnGen <- pkmn %>%
+   ggplot(aes(x=Total, fill=as.factor(Generation))) +
+  geom_density(alpha=0.3) + 
+  ggtitle("Pokemon Total Stats Across Generations")
+pkmnGen
+
+qqPlot(pkmn$Total, col = pkmn$Generation)
+
+# summary stats for Totals across Gens
+
+Gen1 = pkmn %>% filter(Generation==1) %>% get_summary_stats(Total, type="full")
+Gen2 = pkmn %>% filter(Generation==2) %>% get_summary_stats(Total, type="full")
+Gen3 = pkmn %>% filter(Generation==3) %>% get_summary_stats(Total, type="full")
+Gen4 = pkmn %>% filter(Generation==4) %>% get_summary_stats(Total, type="full")
+Gen5 = pkmn %>% filter(Generation==5) %>% get_summary_stats(Total, type="full")
+Gen6 = pkmn %>% filter(Generation==6) %>% get_summary_stats(Total, type="full")
+
+Gen1
+Gen2
+Gen3
+Gen4
+Gen5
+Gen6
+```
+
+Boxplots to examine Variance
+```{r}
+#Take a look at variance
+pkmn %>% ggplot(aes(Generation, Total, color = as.factor(Generation))) +
+  geom_boxplot() + geom_point() + geom_jitter()
+```
+*Variance appears to be relatively equal among all generations according to the boxplot and mean/median shown in summary statistics*
+
+Upon first glance at the density plots, there doesn't appear to be differences between the gens. The density appear to be bimodial and right skewed. The QQ plot doesn't appear to show normality, and based on the boxplots, variance does not appear to greatly skew between generations.
+
+
+## Kruskal-Wallis' ANOVA
+
+As I didn't see normality, I'll use a Kruskal-Wallis' ANOVA to compare the Totals across Generations
+
+```{r}
+pkmnGen=kruskal.test(Total~Generation,data=pkmn)
+pkmnGen
+```
+*The p value is above 0.05, at 0.1002, and therefore I accept the null hypothesis that there are no significant differences in mean Total across generations.*
+
+*Concluding that mean Total does not change significantly across generations reaffirms that power scaling across games is consistent*
+
+
+##Are certain types of pokemon more represented as legendary?
+
+*H0: Pokemon Type and Legendary status are independent. alpha = 0.05*
+```{r}
+#Create table of legendary pokemon and their type
+Leg_Type <-xtabs(~Legendary + Type.1, data = pkmn) 
+Leg_Type
+prop.table(Leg_Type, margin = 2) #View proportions
+```
+Perform Chi-Square test to test H0
+Assumptions: Randomly sampled? Yes
+           : Expected values >5? Yes
+           
+```{r}
+chisq.test(Leg_Type)$expected #About 9% in each type
+chisq.test(Leg_Type)
+```
+Expected: Roughly 9% legendary for each pokemon type.
+
+*p-value = 5.119e-12, therefore, we can reject null hypothesis and that legendary type pokemon are independent of type of pokemon*
+
+Strikingly, when looking back at proportions table, only 2% of normal pokemon are legendary, and there are absolutely no bug, fighting or poison legendary pokemon. In contrast, 24.6% of all psychic pokemon are legendary, 37.5% of all dragon pokemon are legendary, and 50% of all flying type are legendary!
+
+```{r}
+mosaicplot(t(Leg_Type), 
+           main = "Legendary status among Pokemon type",
+           ylab = "Legendary Status",
+           xlab = "Pokemon Type",
+           shade = TRUE)
+```
+
+*Based on the mosaic plot, Legendary type pokemon are overrepresented as Dragon, Flying, and Psychic type pokemon, while underrepresented as Normal type.*
+
+###Can a linear model predict Total based on a Pokemons Special Attack stats?
+```{r}
+#Exploratory plot plotting Total and Special Attack
+ggplot(pkmn, aes(x = Sp..Atk, y = Total)) +
+  geom_point() +
+  geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+This model looks good, but let's see if there is a difference based on Pokemon Type
+```{r}
+ggplot(pkmn, aes(x = Sp..Atk, y = Total, color = Type.1)) +
+  geom_point() +
+  geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+All of the lines appear to follow the same general trend despite their pokemon Type, but now, lets look at Legendary status.
+```{r}
+ggplot(pkmn, aes(x = Sp..Atk, y = Total, color = Legendary)) +
+  geom_point() +
+  geom_jitter() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+Legendary pokemon appear to overall have higher scores, higher special attacks and have slopes are different than non-Legendary Pokemon.
+```{r}
+#Simple Linear model of Total as predicted by Special Attack alone
+SpAtkmod1 <- lm(Total ~ Sp..Atk, data = pkmn)
+#Linear model integrating Legendary Status to Sp.Atk
+SpAtkmod2 <- lm(Total ~ Sp..Atk * Legendary, data = pkmn)
+```
+```{r}
+#Diagnostics and analysis of both models
+plot(SpAtkmod1)
+summary(SpAtkmod1)
+plot(SpAtkmod2)
+summary(SpAtkmod2)
+```
+*Both models are randomly sampled, Residuals are independent from one another, Residuals are normally distributed based on both QQ plots, there does appear to be funneling of residuals*
+*Based on the summary of the data, the better model is SpAtkmod2, with a higher R-squared value, the Multiple R-squared value for SpAtkmod1 = 0.5584, while the Adjusted R-squared value for SpAtkmod2 = 0.6001, indicating that this model is a better predictor of Pokemon Total score.*
+
+*Total (Non-Legendary) = 244.95839 + 2.51636 (Special Attack)*
+*Total (Legendary) = 491.22158 + 1.19624 (Special Attack)*
